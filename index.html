@@ -4,205 +4,237 @@
   <meta charset="UTF-8">
   <title>Symbiotic Runner</title>
   <style>
-    body {
+    html, body {
       margin: 0;
       padding: 0;
+      height: 100%;
+      width: 100%;
       overflow: hidden;
       font-family: Arial, sans-serif;
-      background: #00ff66cc; /* faded neon green */
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      color: white;
+      background: radial-gradient(circle at center, rgba(0, 255, 136, 0.25), rgba(0, 0, 0, 0.95));
+    }
+    canvas {
+      display: block;
+      width: 100vw;
       height: 100vh;
+      background: transparent;
     }
-    h1 {
-      font-size: 2.5rem;
-      margin: 10px;
+    #overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: rgba(0,0,0,0.5);
+      color: white;
+      flex-direction: column;
+      z-index: 2;
+      text-align: center;
+    }
+    #overlay h1 {
+      font-size: 60px;
+      margin-bottom: 20px;
+      color: #00ff88;
+      text-shadow: 0 0 10px #00ff88, 0 0 20px #00ff88;
+    }
+    #overlay p {
+      font-size: 22px;
+    }
+    button {
+      margin-top: 20px;
+      padding: 12px 24px;
+      font-size: 20px;
+      cursor: pointer;
+      border: none;
+      border-radius: 10px;
+      background: #00ff88;
       color: black;
+      font-weight: bold;
+      box-shadow: 0 0 15px #00ff88;
     }
-    #gameContainer {
-      position: relative;
-      width: 100%;
-      max-width: 800px;
-      height: 400px;
-      border: 3px solid black;
-      background: white;
-      overflow: hidden;
+    button:hover {
+      background: #00cc6f;
     }
-    #player {
-      position: absolute;
-      bottom: 0;
-      left: 50px;
-      width: 30px;
-      height: 30px;
-      background: black;
-    }
-    .obstacle {
-      position: absolute;
-      bottom: 0;
-      width: 30px;
-      height: 30px;
-      background: red;
-    }
-    #score, #highScore {
-      margin: 5px;
-      font-size: 1.2rem;
-    }
-    #restartBtn {
-      display: none;
-      margin-top: 10px;
-      padding: 8px 16px;
-      font-size: 1rem;
-      cursor: pointer;
-    }
-    #usernameInput {
-      margin: 10px;
-      padding: 5px;
-      font-size: 1rem;
-    }
-    #startBtn {
-      margin: 10px;
-      padding: 8px 16px;
-      font-size: 1rem;
-      cursor: pointer;
+    input {
+      padding: 10px;
+      font-size: 18px;
+      border-radius: 8px;
+      border: 1px solid #00ff88;
+      margin-top: 15px;
+      text-align: center;
     }
   </style>
 </head>
 <body>
-  <h1>Symbiotic Runner 🏃‍♂️</h1>
-  <input type="text" id="usernameInput" placeholder="Enter username">
-  <button id="startBtn">Start Game</button>
-  <div id="gameContainer">
-    <div id="player"></div>
+  <div id="overlay">
+    <h1>Symbiotic Runner</h1>
+    <p>Enter a username to start</p>
+    <input type="text" id="usernameInput" placeholder="Username" />
+    <button onclick="saveUsername()">Save & Play</button>
   </div>
-  <div id="score">Score: 0</div>
-  <div id="highScore">High Score: 0</div>
-  <button id="restartBtn">Restart</button>
 
-  <script>
-    const player = document.getElementById("player");
-    const gameContainer = document.getElementById("gameContainer");
-    const scoreDisplay = document.getElementById("score");
-    const highScoreDisplay = document.getElementById("highScore");
-    const restartBtn = document.getElementById("restartBtn");
-    const startBtn = document.getElementById("startBtn");
+  <canvas id="gameCanvas" width="800" height="400"></canvas>
+  
+  <script type="module">
+    import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+
+    const SUPABASE_URL = "https://jzofwfixzsotrcmrxlsx.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp6b2Z3Zml4enNvdHJjbXJ4bHN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgzMTczODcsImV4cCI6MjA3Mzg5MzM4N30.zgV7-3R0cuopTtw8caZaYnkM5Mxg1bphJzkuvZGuf-8";
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const overlay = document.getElementById("overlay");
     const usernameInput = document.getElementById("usernameInput");
 
-    let username = "";
-    let isJumping = false;
-    let gravity = 0.9;
-    let jumpHeight = 0;
+    let username = localStorage.getItem("username") || null;
+    if (username) {
+      usernameInput.value = username;
+      overlay.innerHTML = `
+        <h1>Symbiotic Runner</h1>
+        <p>Press SPACE to Start</p>
+        <p>Welcome back, <b>${username}</b></p>
+      `;
+    }
+
+    let gameRunning = false;
+    let player = { x: 100, y: 300, width: 40, height: 40, dy: 0, jump: false };
+    let gravity = 0.6;
+    let obstacles = [];
     let score = 0;
     let highScore = 0;
-    let gameInterval;
-    let obstacleInterval;
-    let obstacleSpeed = 4;
-    let spawnRate = 2000;
 
-    function startGame() {
-      username = usernameInput.value.trim();
-      if (!username) {
-        alert("Please enter a username to play!");
-        return;
-      }
-      startBtn.style.display = "none";
-      usernameInput.style.display = "none";
-      restartBtn.style.display = "none";
-      score = 0;
-      scoreDisplay.textContent = "Score: 0";
-      gameInterval = setInterval(updateGame, 20);
-      obstacleInterval = setInterval(createObstacle, spawnRate);
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
     }
-
-    function jump() {
-      if (isJumping) return;
-      isJumping = true;
-      let upInterval = setInterval(() => {
-        if (jumpHeight >= 150) {
-          clearInterval(upInterval);
-          let downInterval = setInterval(() => {
-            if (jumpHeight <= 0) {
-              clearInterval(downInterval);
-              isJumping = false;
-            }
-            jumpHeight -= 5;
-            player.style.bottom = jumpHeight + "px";
-          }, 20);
-        }
-        jumpHeight += 5;
-        player.style.bottom = jumpHeight + "px";
-      }, 20);
-    }
-
-    function createObstacle() {
-      const obstacle = document.createElement("div");
-      obstacle.classList.add("obstacle");
-      obstacle.style.left = "800px";
-      gameContainer.appendChild(obstacle);
-
-      let moveInterval = setInterval(() => {
-        let playerRect = player.getBoundingClientRect();
-        let obstacleRect = obstacle.getBoundingClientRect();
-
-        // collision check
-        if (
-          playerRect.right > obstacleRect.left &&
-          playerRect.left < obstacleRect.right &&
-          playerRect.bottom > obstacleRect.top
-        ) {
-          gameOver();
-          clearInterval(moveInterval);
-        }
-
-        let obstacleLeft = parseInt(obstacle.style.left);
-        if (obstacleLeft <= -30) {
-          obstacle.remove();
-          score++;
-          scoreDisplay.textContent = "Score: " + score;
-
-          // difficulty scaling
-          if (score % 5 === 0 && obstacleSpeed < 10) {
-            obstacleSpeed += 0.5;
-          }
-          if (score % 10 === 0 && spawnRate > 800) {
-            clearInterval(obstacleInterval);
-            spawnRate -= 200;
-            obstacleInterval = setInterval(createObstacle, spawnRate);
-          }
-        } else {
-          obstacle.style.left = obstacleLeft - obstacleSpeed + "px";
-        }
-      }, 20);
-    }
-
-    function updateGame() {
-      // continuous game updates can go here if needed
-    }
-
-    function gameOver() {
-      clearInterval(gameInterval);
-      clearInterval(obstacleInterval);
-      if (score > highScore) {
-        highScore = score;
-        highScoreDisplay.textContent = "High Score (" + username + "): " + highScore;
-      }
-      restartBtn.style.display = "inline-block";
-    }
-
-    restartBtn.addEventListener("click", () => {
-      document.querySelectorAll(".obstacle").forEach(o => o.remove());
-      obstacleSpeed = 4;
-      spawnRate = 2000;
-      startGame();
-    });
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
 
     document.addEventListener("keydown", (e) => {
-      if (e.code === "Space" || e.code === "ArrowUp") {
-        jump();
+      if (!gameRunning && e.code === "Space" && username) {
+        startGame();
+      }
+      if (gameRunning && (e.code === "ArrowUp" || e.code === "Space")) {
+        if (!player.jump) {
+          player.dy = -12;
+          player.jump = true;
+        }
       }
     });
 
-    startBtn.addEventListener("click", startGame);
+    function saveUsername() {
+      username = usernameInput.value.trim();
+      if (!username) {
+        alert("Enter a username!");
+        return;
+      }
+      localStorage.setItem("username", username);
+      overlay.innerHTML = `
+        <h1>Symbiotic Runner</h1>
+        <p>Press SPACE to Start</p>
+        <p>Welcome, <b>${username}</b></p>
+      `;
+      loadHighScore();
+    }
+
+    async function loadHighScore() {
+      let { data } = await supabase.from("wall").select("highscore").eq("user", username).single();
+      highScore = data ? data.highscore : 0;
+    }
+
+    async function saveHighScore() {
+      if (score > highScore) {
+        highScore = score;
+        await supabase.from("wall").upsert({ user: username, highscore: highScore });
+      }
+    }
+
+    function startGame() {
+      overlay.style.display = "none";
+      gameRunning = true;
+      player.y = canvas.height - 90;
+      player.dy = 0;
+      player.jump = false;
+      obstacles = [];
+      score = 0;
+      requestAnimationFrame(update);
+    }
+
+    function update() {
+      if (!gameRunning) return;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Player
+      ctx.fillStyle = "#00ff88";
+      ctx.fillRect(player.x, player.y, player.width, player.height);
+
+      // Gravity
+      player.y += player.dy;
+      player.dy += gravity;
+
+      let groundY = canvas.height - 50;
+      if (player.y + player.height >= groundY) {
+        player.y = groundY - player.height;
+        player.dy = 0;
+        player.jump = false;
+      }
+
+      // Ground
+      ctx.fillStyle = "#222";
+      ctx.fillRect(0, groundY, canvas.width, 50);
+
+      // Obstacles
+      if (Math.random() < 0.02) {
+        obstacles.push({ x: canvas.width, y: groundY - 40, width: 30, height: 40 });
+      }
+      ctx.fillStyle = "#ff4444";
+      obstacles.forEach((obs, i) => {
+        obs.x -= 6;
+        ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+        if (obs.x + obs.width < 0) obstacles.splice(i, 1);
+
+        // Collision
+        if (
+          player.x < obs.x + obs.width &&
+          player.x + player.width > obs.x &&
+          player.y < obs.y + obs.height &&
+          player.y + player.height > obs.y
+        ) {
+          gameOver();
+        }
+      });
+
+      // Score
+      score++;
+      ctx.fillStyle = "white";
+      ctx.font = "20px Arial";
+      ctx.fillText("Score: " + score, 20, 30);
+      ctx.fillText("High Score: " + highScore, 20, 60);
+
+      requestAnimationFrame(update);
+    }
+
+    async function gameOver() {
+      gameRunning = false;
+      await saveHighScore();
+      overlay.style.display = "flex";
+      overlay.innerHTML = `
+        <h1>Game Over</h1>
+        <p>Your score: ${score}</p>
+        <p>High score: ${highScore}</p>
+        <button onclick="startGame()">Restart</button>
+      `;
+    }
+
+    // Load high score if user exists
+    if (username) loadHighScore();
+
+    // Expose startGame globally
+    window.startGame = startGame;
+    window.saveUsername = saveUsername;
   </script>
 </body>
 </html>
