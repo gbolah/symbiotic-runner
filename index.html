@@ -186,10 +186,20 @@
       ctx.fillStyle = "#222";
       ctx.fillRect(0, groundY, canvas.width, 50);
 
-      // Obstacles
-      if (Math.random() < 0.02) {
-        obstacles.push({ x: canvas.width, y: groundY - 40, width: 30, height: 40 });
+      // Obstacles (easier early, harder later)
+      let spawnChance = 0.02;
+      if (Math.random() < spawnChance) {
+        if (score < 1000) {
+          // Only one obstacle at a time at the start
+          if (obstacles.length === 0) {
+            obstacles.push({ x: canvas.width, y: groundY - 40, width: 30, height: 40 });
+          }
+        } else {
+          // Normal spawning after score 1000
+          obstacles.push({ x: canvas.width, y: groundY - 40, width: 30, height: 40 });
+        }
       }
+
       ctx.fillStyle = "#ff4444";
       obstacles.forEach((obs, i) => {
         obs.x -= 6;
@@ -229,10 +239,8 @@
       `;
     }
 
-    // Load high score if user exists
     if (username) loadHighScore();
 
-    // Expose startGame globally
     window.startGame = startGame;
     window.saveUsername = saveUsername;
   </script>
