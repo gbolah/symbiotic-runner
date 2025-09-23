@@ -4,246 +4,197 @@
   <meta charset="UTF-8">
   <title>Symbiotic Runner</title>
   <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      width: 100%;
-      overflow: hidden; /* no page scroll */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
       font-family: Arial, sans-serif;
-      color: white;
-      background: radial-gradient(circle at center, rgba(0, 255, 136, 0.25), rgba(0, 0, 0, 0.95));
-      /* subtle neon glow feel */
-    }
-    canvas {
-      display: block;
-      width: 100vw;
+      background: rgba(57, 255, 20, 0.2); /* faded neon green */
+      overflow: hidden; /* no scroll */
       height: 100vh;
-      background: transparent; /* let neon bg show through */
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
-    #overlay {
-      position: absolute;
-      top: 0; left: 0; right: 0; bottom: 0;
+    header {
+      width: 100%;
+      text-align: center;
+      padding: 20px;
+      font-size: 2em;
+      font-weight: bold;
+      background: #39ff14;
+      color: black;
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 1000;
+    }
+    #game-container {
+      margin-top: 80px; /* space for header */
+      width: 100%;
+      height: calc(100vh - 80px);
       display: flex;
       justify-content: center;
       align-items: center;
-      background: rgba(0,0,0,0.5);
-      color: white;
-      flex-direction: column;
-      z-index: 2;
+    }
+    canvas {
+      border: 3px solid #39ff14;
+      background: rgba(0, 0, 0, 0.7);
+      display: block;
+    }
+    #controls {
+      margin-top: 10px;
       text-align: center;
     }
-    #overlay h1 {
-      font-size: 60px; /* bigger header */
-      margin-bottom: 20px;
-      color: #00ff88;
-      text-shadow: 0 0 10px #00ff88, 0 0 20px #00ff88;
-    }
-    #overlay p {
-      font-size: 22px;
-    }
     button {
-      margin-top: 20px;
-      padding: 12px 24px;
-      font-size: 20px;
-      cursor: pointer;
+      background: #39ff14;
       border: none;
-      border-radius: 10px;
-      background: #00ff88;
+      padding: 10px 20px;
+      margin: 5px;
+      cursor: pointer;
+      font-size: 1em;
+      border-radius: 5px;
+    }
+    #score {
+      margin-top: 5px;
+      font-size: 1.2em;
       color: black;
-      font-weight: bold;
-      box-shadow: 0 0 15px #00ff88;
-    }
-    button:hover {
-      background: #00cc6f;
-    }
-    #leaderboard {
-      position: absolute;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0,0,0,0.95);
-      color: white;
-      z-index: 3;
-      display: none;
-      flex-direction: column;
-      align-items: center;
-      padding: 30px;
-      overflow-y: auto; /* scroll only inside leaderboard */
-    }
-    #leaderboard h2 {
-      font-size: 40px;
-      margin-bottom: 20px;
-      color: #00ff88;
-      text-shadow: 0 0 10px #00ff88;
-    }
-    #leaderboard ul {
-      list-style: none;
-      padding: 0;
-      width: 100%;
-      max-width: 400px;
-    }
-    #leaderboard li {
-      padding: 10px;
-      border-bottom: 1px solid #555;
-      font-size: 18px;
-      text-align: left;
     }
   </style>
 </head>
 <body>
-  <div id="overlay">
-    <h1>Symbiotic Runner</h1>
-    <p>Press SPACE to Start</p>
+  <header>Symbiotic Runner</header>
+  <div id="game-container">
+    <canvas id="gameCanvas" width="500" height="400"></canvas>
+  </div>
+  <div id="controls">
+    <button id="startBtn">Start</button>
+    <button id="restartBtn">Restart</button>
+    <div id="score">Score: 0 | High Score: 0</div>
   </div>
 
-  <div id="leaderboard">
-    <h2>Leaderboard</h2>
-    <ul id="scoresList"></ul>
-    <button onclick="closeLeaderboard()">Close</button>
-  </div>
-
-  <canvas id="gameCanvas" width="800" height="400"></canvas>
-  
   <script type="module">
-    import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+    // Supabase setup
+    import { createClient } from "https://esm.sh/@supabase/supabase-js";
 
-    const SUPABASE_URL = "https://jzofwfixzsotrcmrxlsx.supabase.co";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp6b2Z3Zml4enNvdHJjbXJ4bHN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgzMTczODcsImV4cCI6MjA3Mzg5MzM4N30.zgV7-3R0cuopTtw8caZaYnkM5Mxg1bphJzkuvZGuf-8";
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const SUPABASE_URL = "https://YOUR_PROJECT.supabase.co"; 
+    const SUPABASE_KEY = "YOUR_ANON_KEY"; 
+    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+    // game setup
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
-    const overlay = document.getElementById("overlay");
-    const leaderboard = document.getElementById("leaderboard");
-    const scoresList = document.getElementById("scoresList");
+    const scoreDisplay = document.getElementById("score");
+    const startBtn = document.getElementById("startBtn");
+    const restartBtn = document.getElementById("restartBtn");
 
-    let gameRunning = false;
-    let player = { x: 100, y: 300, width: 40, height: 40, dy: 0, jump: false };
-    let gravity = 0.6;
-    let obstacles = [];
-    let score = 0;
+    let player, obstacles, score, highScore, gameLoop, gameRunning = false;
 
-    function resizeCanvas() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+    async function loadHighScore() {
+      const { data } = await supabase.from("scores").select("highscore").eq("user", "guest").single();
+      highScore = data ? data.highscore : 0;
+      updateScore();
     }
-    window.addEventListener("resize", resizeCanvas);
-    resizeCanvas();
 
-    document.addEventListener("keydown", (e) => {
-      if (!gameRunning && e.code === "Space") {
-        startGame();
+    async function saveHighScore() {
+      if (score > highScore) {
+        highScore = score;
+        await supabase.from("scores").upsert({ user: "guest", highscore: highScore });
       }
-      if (gameRunning && (e.code === "ArrowUp" || e.code === "Space")) {
-        if (!player.jump) {
-          player.dy = -12;
-          player.jump = true;
-        }
-      }
-    });
+      updateScore();
+    }
 
-    function startGame() {
-      overlay.style.display = "none";
-      leaderboard.style.display = "none";
-      gameRunning = true;
-      player.y = canvas.height - 90;
-      player.dy = 0;
-      player.jump = false;
+    function updateScore() {
+      scoreDisplay.textContent = `Score: ${score} | High Score: ${highScore}`;
+    }
+
+    function resetGame() {
+      player = { x: 50, y: 350, width: 30, height: 30, dy: 0, jumpPower: -10, gravity: 0.5, grounded: true };
       obstacles = [];
       score = 0;
-      requestAnimationFrame(update);
+      updateScore();
     }
 
-    function update() {
-      if (!gameRunning) return;
+    function drawPlayer() {
+      ctx.fillStyle = "#39ff14";
+      ctx.fillRect(player.x, player.y, player.width, player.height);
+    }
 
+    function drawObstacles() {
+      ctx.fillStyle = "red";
+      for (let obs of obstacles) {
+        ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+      }
+    }
+
+    function updateGame() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Player
-      ctx.fillStyle = "#00ff88";
-      ctx.fillRect(player.x, player.y, player.width, player.height);
-
-      // Gravity
+      // Player physics
       player.y += player.dy;
-      player.dy += gravity;
-
-      let groundY = canvas.height - 50;
-      if (player.y + player.height >= groundY) {
-        player.y = groundY - player.height;
+      if (player.y + player.height < canvas.height) {
+        player.dy += player.gravity;
+        player.grounded = false;
+      } else {
+        player.y = canvas.height - player.height;
         player.dy = 0;
-        player.jump = false;
+        player.grounded = true;
       }
-
-      // Ground
-      ctx.fillStyle = "#222";
-      ctx.fillRect(0, groundY, canvas.width, 50);
 
       // Obstacles
       if (Math.random() < 0.02) {
-        obstacles.push({ x: canvas.width, y: groundY - 40, width: 30, height: 40 });
+        obstacles.push({ x: canvas.width, y: 370, width: 20, height: 30 });
       }
-      ctx.fillStyle = "#ff4444";
-      obstacles.forEach((obs, i) => {
-        obs.x -= 6;
-        ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
-        if (obs.x + obs.width < 0) obstacles.splice(i, 1);
-
-        // Collision
-        if (
-          player.x < obs.x + obs.width &&
-          player.x + player.width > obs.x &&
-          player.y < obs.y + obs.height &&
-          player.y + player.height > obs.y
-        ) {
-          gameOver();
+      for (let obs of obstacles) {
+        obs.x -= 3;
+        if (obs.x + obs.width < 0) {
+          obstacles.shift();
+          score++;
+          updateScore();
         }
-      });
+        // Collision
+        if (player.x < obs.x + obs.width &&
+            player.x + player.width > obs.x &&
+            player.y < obs.y + obs.height &&
+            player.y + player.height > obs.y) {
+          gameOver();
+          return;
+        }
+      }
 
-      // Score
-      score++;
+      drawObstacles();
+      drawPlayer();
+    }
+
+    function gameOver() {
+      clearInterval(gameLoop);
+      gameRunning = false;
+      saveHighScore();
       ctx.fillStyle = "white";
       ctx.font = "20px Arial";
-      ctx.fillText("Score: " + score, 20, 30);
-
-      requestAnimationFrame(update);
+      ctx.fillText("Game Over!", 200, 200);
     }
 
-    async function gameOver() {
-      gameRunning = false;
-      overlay.style.display = "flex";
-      overlay.innerHTML = `<h1>Game Over</h1>
-        <p>Your score: ${score}</p>
-        <button onclick="startGame()">Restart</button>
-        <button onclick="showLeaderboard()">Leaderboard</button>`;
-
-      await supabase.from("wall").insert([{ score }]);
+    function startGame() {
+      if (gameRunning) return;
+      resetGame();
+      gameRunning = true;
+      gameLoop = setInterval(updateGame, 20);
     }
 
-    async function showLeaderboard() {
-      overlay.style.display = "none";
-      leaderboard.style.display = "flex";
-      scoresList.innerHTML = "<li>Loading...</li>";
-
-      let { data, error } = await supabase
-        .from("wall")
-        .select("*")
-        .order("score", { ascending: false })
-        .limit(20);
-
-      if (error) {
-        scoresList.innerHTML = "<li>Error loading scores</li>";
-        return;
+    // Controls
+    document.addEventListener("keydown", (e) => {
+      if (e.code === "ArrowUp" && player.grounded) {
+        player.dy = player.jumpPower;
       }
+    });
 
-      scoresList.innerHTML = "";
-      data.forEach((row, i) => {
-        scoresList.innerHTML += `<li>${i + 1}. Score: ${row.score}</li>`;
-      });
-    }
+    startBtn.addEventListener("click", startGame);
+    restartBtn.addEventListener("click", () => {
+      clearInterval(gameLoop);
+      startGame();
+    });
 
-    function closeLeaderboard() {
-      leaderboard.style.display = "none";
-      overlay.style.display = "flex";
-    }
+    // Load initial high score
+    loadHighScore();
   </script>
 </body>
 </html>
