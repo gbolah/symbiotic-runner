@@ -1,218 +1,249 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Symbiotic Runner 🏃‍♂️💚</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <title>Symbiotic Runner</title>
   <style>
-    body {
+    html, body {
       margin: 0;
+      padding: 0;
+      height: 100%;
+      width: 100%;
+      overflow: hidden; /* no page scroll */
       font-family: Arial, sans-serif;
-      background: #0a0f0f;
-      color: #fff;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-    h1 {
-      color: #00ff88;
-      margin: 20px 0 5px;
+      color: white;
+      background: radial-gradient(circle at center, rgba(0, 255, 136, 0.25), rgba(0, 0, 0, 0.95));
+      /* subtle neon glow feel */
     }
     canvas {
-      border: 2px solid #00ff88;
-      background: #111;
       display: block;
-      margin: 10px auto;
+      width: 100vw;
+      height: 100vh;
+      background: transparent; /* let neon bg show through */
     }
-    #score {
-      font-size: 20px;
-      margin: 10px 0;
-    }
-    form {
+    #overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
       display: flex;
-      gap: 8px;
-      margin: 15px 0;
+      justify-content: center;
+      align-items: center;
+      background: rgba(0,0,0,0.5);
+      color: white;
+      flex-direction: column;
+      z-index: 2;
+      text-align: center;
     }
-    input {
-      padding: 8px;
-      border-radius: 6px;
-      border: 1px solid #00ff88;
-      background: #111;
-      color: #fff;
+    #overlay h1 {
+      font-size: 60px; /* bigger header */
+      margin-bottom: 20px;
+      color: #00ff88;
+      text-shadow: 0 0 10px #00ff88, 0 0 20px #00ff88;
+    }
+    #overlay p {
+      font-size: 22px;
     }
     button {
-      padding: 8px 14px;
-      border: none;
-      border-radius: 6px;
-      background: #00ff88;
-      font-weight: bold;
+      margin-top: 20px;
+      padding: 12px 24px;
+      font-size: 20px;
       cursor: pointer;
+      border: none;
+      border-radius: 10px;
+      background: #00ff88;
+      color: black;
+      font-weight: bold;
+      box-shadow: 0 0 15px #00ff88;
     }
     button:hover {
       background: #00cc6f;
     }
     #leaderboard {
-      margin-top: 20px;
-      width: 260px;
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.95);
+      color: white;
+      z-index: 3;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      padding: 30px;
+      overflow-y: auto; /* scroll only inside leaderboard */
     }
     #leaderboard h2 {
-      margin: 0 0 10px;
+      font-size: 40px;
+      margin-bottom: 20px;
       color: #00ff88;
-      font-size: 1.2rem;
+      text-shadow: 0 0 10px #00ff88;
     }
     #leaderboard ul {
       list-style: none;
       padding: 0;
-      margin: 0;
+      width: 100%;
+      max-width: 400px;
     }
     #leaderboard li {
-      padding: 6px;
-      background: #111;
-      margin-bottom: 6px;
-      border: 1px solid #00ff88;
-      border-radius: 6px;
-      font-size: 14px;
-      display: flex;
-      justify-content: space-between;
+      padding: 10px;
+      border-bottom: 1px solid #555;
+      font-size: 18px;
+      text-align: left;
     }
   </style>
 </head>
 <body>
-  <h1>Symbiotic Runner 🏃‍♂️</h1>
-  <p>Jump over obstacles, survive as long as you can!</p>
-  <canvas id="gameCanvas" width="400" height="200"></canvas>
-  <div id="score">Score: 0</div>
-
-  <form id="saveForm">
-    <input id="playerName" type="text" placeholder="Your name" required />
-    <button type="submit">Save Score</button>
-  </form>
-
-  <div id="leaderboard">
-    <h2>🏆 Leaderboard</h2>
-    <ul id="scoresList"></ul>
+  <div id="overlay">
+    <h1>Symbiotic Runner</h1>
+    <p>Press SPACE to Start</p>
   </div>
 
-  <!-- Supabase -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script>
-    // Supabase config (your meme project)
+  <div id="leaderboard">
+    <h2>Leaderboard</h2>
+    <ul id="scoresList"></ul>
+    <button onclick="closeLeaderboard()">Close</button>
+  </div>
+
+  <canvas id="gameCanvas" width="800" height="400"></canvas>
+  
+  <script type="module">
+    import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+
     const SUPABASE_URL = "https://jzofwfixzsotrcmrxlsx.supabase.co";
-    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp6b2Z3Zml4enNvdHJjbXJ4bHN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgzMTczODcsImV4cCI6MjA3Mzg5MzM4N30.zgV7-3R0cuopTtw8caZaYnkM5Mxg1bphJzkuvZGuf-8";
-    const LB_TABLE = "runner_leaderboard";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp6b2Z3Zml4enNvdHJjbXJ4bHN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgzMTczODcsImV4cCI6MjA3Mzg5MzM4N30.zgV7-3R0cuopTtw8caZaYnkM5Mxg1bphJzkuvZGuf-8";
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-    // Game setup
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
-    const scoreEl = document.getElementById("score");
+    const overlay = document.getElementById("overlay");
+    const leaderboard = document.getElementById("leaderboard");
+    const scoresList = document.getElementById("scoresList");
 
-    let player = { x: 30, y: 150, w: 20, h: 20, vy: 0, jump: -6, gravity: 0.3 };
+    let gameRunning = false;
+    let player = { x: 100, y: 300, width: 40, height: 40, dy: 0, jump: false };
+    let gravity = 0.6;
     let obstacles = [];
     let score = 0;
-    let gameOver = false;
 
-    function resetGame() {
-      player.y = 150; player.vy = 0;
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+
+    document.addEventListener("keydown", (e) => {
+      if (!gameRunning && e.code === "Space") {
+        startGame();
+      }
+      if (gameRunning && (e.code === "ArrowUp" || e.code === "Space")) {
+        if (!player.jump) {
+          player.dy = -12;
+          player.jump = true;
+        }
+      }
+    });
+
+    function startGame() {
+      overlay.style.display = "none";
+      leaderboard.style.display = "none";
+      gameRunning = true;
+      player.y = canvas.height - 90;
+      player.dy = 0;
+      player.jump = false;
       obstacles = [];
       score = 0;
-      gameOver = false;
-    }
-
-    function draw() {
-      ctx.fillStyle = "#111";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // player
-      ctx.fillStyle = "#00ff88";
-      ctx.fillRect(player.x, player.y, player.w, player.h);
-
-      // obstacles
-      ctx.fillStyle = "#f33";
-      obstacles.forEach(o => ctx.fillRect(o.x, o.y, o.w, o.h));
-
-      scoreEl.textContent = "Score: " + score;
+      requestAnimationFrame(update);
     }
 
     function update() {
-      if (gameOver) return;
-      player.vy += player.gravity;
-      player.y += player.vy;
-      if (player.y > 150) { player.y = 150; player.vy = 0; }
+      if (!gameRunning) return;
 
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Player
+      ctx.fillStyle = "#00ff88";
+      ctx.fillRect(player.x, player.y, player.width, player.height);
+
+      // Gravity
+      player.y += player.dy;
+      player.dy += gravity;
+
+      let groundY = canvas.height - 50;
+      if (player.y + player.height >= groundY) {
+        player.y = groundY - player.height;
+        player.dy = 0;
+        player.jump = false;
+      }
+
+      // Ground
+      ctx.fillStyle = "#222";
+      ctx.fillRect(0, groundY, canvas.width, 50);
+
+      // Obstacles
       if (Math.random() < 0.02) {
-        obstacles.push({ x: 400, y: 170, w: 20, h: 30 });
+        obstacles.push({ x: canvas.width, y: groundY - 40, width: 30, height: 40 });
       }
+      ctx.fillStyle = "#ff4444";
+      obstacles.forEach((obs, i) => {
+        obs.x -= 6;
+        ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+        if (obs.x + obs.width < 0) obstacles.splice(i, 1);
 
-      obstacles.forEach(o => o.x -= 2);
-      obstacles = obstacles.filter(o => o.x + o.w > 0);
-
-      // collision
-      obstacles.forEach(o => {
-        if (player.x < o.x + o.w && player.x + player.w > o.x &&
-            player.y < o.y + o.h && player.y + player.h > o.y) {
-          gameOver = true;
-          alert("Game Over! Your score: " + score);
+        // Collision
+        if (
+          player.x < obs.x + obs.width &&
+          player.x + player.width > obs.x &&
+          player.y < obs.y + obs.height &&
+          player.y + player.height > obs.y
+        ) {
+          gameOver();
         }
       });
 
+      // Score
       score++;
+      ctx.fillStyle = "white";
+      ctx.font = "20px Arial";
+      ctx.fillText("Score: " + score, 20, 30);
+
+      requestAnimationFrame(update);
     }
 
-    function loop() {
-      update();
-      draw();
-      requestAnimationFrame(loop);
+    async function gameOver() {
+      gameRunning = false;
+      overlay.style.display = "flex";
+      overlay.innerHTML = `<h1>Game Over</h1>
+        <p>Your score: ${score}</p>
+        <button onclick="startGame()">Restart</button>
+        <button onclick="showLeaderboard()">Leaderboard</button>`;
+
+      await supabase.from("wall").insert([{ score }]);
     }
 
-    document.addEventListener("keydown", e => {
-      if (e.code === "Space" && player.y >= 150) {
-        player.vy = player.jump;
+    async function showLeaderboard() {
+      overlay.style.display = "none";
+      leaderboard.style.display = "flex";
+      scoresList.innerHTML = "<li>Loading...</li>";
+
+      let { data, error } = await supabase
+        .from("wall")
+        .select("*")
+        .order("score", { ascending: false })
+        .limit(20);
+
+      if (error) {
+        scoresList.innerHTML = "<li>Error loading scores</li>";
+        return;
       }
-      if (e.code === "Enter" && gameOver) {
-        resetGame();
-      }
-    });
 
-    loop();
-
-    // Save & Leaderboard
-    const saveForm = document.getElementById("saveForm");
-    const playerNameInput = document.getElementById("playerName");
-    const scoresList = document.getElementById("scoresList");
-
-    async function loadScores() {
       scoresList.innerHTML = "";
-      const { data, error } = await client.from(LB_TABLE).select("*").order("score", { ascending: false }).limit(10);
-      if (error) { console.error(error); return; }
-      data.forEach(row => {
-        const li = document.createElement("li");
-        li.textContent = row.name + " — " + row.score;
-        scoresList.appendChild(li);
+      data.forEach((row, i) => {
+        scoresList.innerHTML += `<li>${i + 1}. Score: ${row.score}</li>`;
       });
     }
 
-    saveForm.addEventListener("submit", async e => {
-      e.preventDefault();
-      if (gameOver && playerNameInput.value.trim()) {
-        const { error } = await client.from(LB_TABLE).insert([{ 
-          name: playerNameInput.value.trim(),
-          score 
-        }]);
-        if (error) {
-          alert("Error saving score.");
-          console.error(error);
-        } else {
-          alert("Score saved!");
-          loadScores();
-        }
-      } else {
-        alert("Finish the game first!");
-      }
-    });
-
-    loadScores();
+    function closeLeaderboard() {
+      leaderboard.style.display = "none";
+      overlay.style.display = "flex";
+    }
   </script>
 </body>
 </html>
