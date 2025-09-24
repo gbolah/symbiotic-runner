@@ -162,14 +162,29 @@
       requestAnimationFrame(update);
     }
 
+    function drawPlayer() {
+      ctx.beginPath();
+      let wave = Math.sin(Date.now() / 200) * 10;
+      ctx.moveTo(player.x, player.y + 10 + wave);
+      ctx.bezierCurveTo(player.x, player.y + wave, player.x + player.width, player.y + wave, player.x + player.width, player.y + 20 + wave);
+      ctx.bezierCurveTo(player.x + player.width, player.y + player.height / 2 + wave, player.x, player.y + player.height / 2 + wave, player.x, player.y + player.height - 20 + wave);
+      ctx.bezierCurveTo(player.x, player.y + player.height + wave, player.x + player.width, player.y + player.height + wave, player.x + player.width, player.y + player.height - 10 + wave);
+
+      ctx.strokeStyle = "#00ff88";
+      ctx.lineWidth = 6;
+      ctx.shadowBlur = 20;
+      ctx.shadowColor = "#00ff88";
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+
     function update() {
       if (!gameRunning) return;
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       // Player
-      ctx.fillStyle = "#00ff88";
-      ctx.fillRect(player.x, player.y, player.width, player.height);
+      drawPlayer();
 
       // Gravity
       player.y += player.dy;
@@ -190,12 +205,10 @@
       let spawnChance = 0.02;
       if (Math.random() < spawnChance) {
         if (score < 1000) {
-          // Only one obstacle at a time at the start
           if (obstacles.length === 0) {
             obstacles.push({ x: canvas.width, y: groundY - 40, width: 30, height: 40 });
           }
         } else {
-          // Normal spawning after score 1000
           obstacles.push({ x: canvas.width, y: groundY - 40, width: 30, height: 40 });
         }
       }
@@ -206,7 +219,7 @@
         ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
         if (obs.x + obs.width < 0) obstacles.splice(i, 1);
 
-        // Collision
+        // Collision (uses bounding box for fairness)
         if (
           player.x < obs.x + obs.width &&
           player.x + player.width > obs.x &&
