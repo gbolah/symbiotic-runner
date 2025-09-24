@@ -6,213 +6,229 @@
   <style>
     body {
       margin: 0;
-      padding: 0;
       overflow: hidden;
-      background-color: #0f0; /* neon green */
-      background: rgba(0, 255, 0, 0.2); /* faded neon green */
       font-family: Arial, sans-serif;
+      background: #adff2f; /* faded neon green */
+    }
+
+    header {
+      background: rgba(0, 0, 0, 0.8);
+      color: #00ff00;
+      padding: 20px;
+      text-align: center;
+      font-size: 28px;
+      font-weight: bold;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      z-index: 10;
     }
 
     #gameCanvas {
       display: block;
-      margin: 0 auto;
       background: transparent;
+      margin: 0;
+      position: absolute;
+      top: 80px;
+      left: 0;
     }
 
     #ui {
       position: fixed;
-      top: 10px;
-      width: 100%;
-      text-align: center;
-      color: black;
-      font-size: 24px;
-      font-weight: bold;
-      z-index: 2;
-    }
-
-    #usernameInput {
-      margin-top: 10px;
-      padding: 5px;
+      top: 80px;
+      right: 20px;
+      background: rgba(0,0,0,0.6);
+      padding: 10px;
+      border-radius: 10px;
+      color: #fff;
       font-size: 16px;
     }
 
-    #startBtn {
+    #usernameInput {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.9);
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+      color: #fff;
+      z-index: 20;
+    }
+
+    button {
       margin-top: 10px;
       padding: 10px 20px;
-      font-size: 18px;
-      font-weight: bold;
+      font-size: 16px;
+      border: none;
+      border-radius: 8px;
+      background: #00ff00;
       cursor: pointer;
+    }
+
+    button:hover {
+      background: #33ff33;
     }
   </style>
 </head>
 <body>
-  <div id="ui">
-    <div id="usernameContainer">
-      Enter Username: <input type="text" id="usernameInput" placeholder="Your name">
-      <button id="startBtn">Start Game</button>
-    </div>
-    <div id="scoreContainer" style="display:none;">
-      <div id="score">Score: 0</div>
-      <div id="highScore">High Score: 0</div>
-    </div>
+  <header>Symbiotic Runner</header>
+
+  <canvas id="gameCanvas"></canvas>
+
+  <div id="ui" style="display:none;">
+    <p>Score: <span id="score">0</span></p>
+    <p>High Score: <span id="highScore">0</span></p>
+    <button id="restartBtn">Restart</button>
   </div>
-  <canvas id="gameCanvas" width="800" height="400"></canvas>
+
+  <div id="usernameInput">
+    <h2>Enter Username</h2>
+    <input type="text" id="username" placeholder="Your name">
+    <br>
+    <button id="startBtn">Start Game</button>
+  </div>
 
   <script>
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight - 80; // below header
 
+    const ui = document.getElementById("ui");
+    const scoreEl = document.getElementById("score");
+    const highScoreEl = document.getElementById("highScore");
+    const restartBtn = document.getElementById("restartBtn");
+    const usernameInputDiv = document.getElementById("usernameInput");
     const startBtn = document.getElementById("startBtn");
-    const usernameInput = document.getElementById("usernameInput");
-    const usernameContainer = document.getElementById("usernameContainer");
-    const scoreContainer = document.getElementById("scoreContainer");
-    const scoreDisplay = document.getElementById("score");
-    const highScoreDisplay = document.getElementById("highScore");
+    const usernameField = document.getElementById("username");
 
-    let player, obstacles, score, highScore, gameOver, gameStarted, username;
+    let username = "";
+    let highScores = JSON.parse(localStorage.getItem("symbioticRunnerHighScores")) || {};
 
-    class Player {
-      constructor() {
-        this.x = 50;
-        this.y = 300;
-        this.width = 30;
-        this.height = 30;
-        this.color = "black";
-        this.dy = 0;
-        this.gravity = 0.6;
-        this.jumpPower = -12;
-        this.grounded = false;
-      }
+    let player = { x: 50, y: 0, width: 20, height: 20, dy: 0, gravity: 0.6, jumpPower: -12, grounded: false };
+    let obstacles = [];
+    let frame = 0;
+    let score = 0;
+    let highScore = 0;
+    let gameRunning = false;
 
-      draw() {
-        ctx.fillStyle = this.color;
-        ctx.fillRect(this.x, this.y, this.width, this.height);
-      }
+    function drawPlayer() {
+      ctx.fillStyle = "#00FF00";
+      ctx.font = "bold 20px Arial";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("S", player.x + player.width / 2, player.y + player.height / 2);
+    }
 
-      update() {
-        this.y += this.dy;
-        if (this.y + this.height < canvas.height) {
-          this.dy += this.gravity;
-          this.grounded = false;
-        } else {
-          this.y = canvas.height - this.height;
-          this.dy = 0;
-          this.grounded = true;
-        }
-        this.draw();
-      }
+    function drawObstacles() {
+      ctx.fillStyle = "black";
+      obstacles.forEach(o => ctx.fillRect(o.x, o.y, o.width, o.height));
+    }
 
-      jump() {
-        if (this.grounded) {
-          this.dy = this.jumpPower;
-        }
+    function updatePlayer() {
+      player.dy += player.gravity;
+      player.y += player.dy;
+
+      if (player.y + player.height >= canvas.height) {
+        player.y = canvas.height - player.height;
+        player.dy = 0;
+        player.grounded = true;
       }
     }
 
-    class Obstacle {
-      constructor(type, speed) {
-        this.type = type;
-        this.speed = speed;
-        this.x = canvas.width;
-        this.y = type === "ground" ? canvas.height - 30 : canvas.height - 150;
-        this.width = type === "ground" ? 30 : 25;
-        this.height = type === "ground" ? 30 : 25;
-      }
+    function updateObstacles() {
+      obstacles.forEach(o => o.x -= 5);
+      obstacles = obstacles.filter(o => o.x + o.width > 0);
 
-      draw() {
-        ctx.fillStyle = "black";
-        if (this.type === "ground") {
-          ctx.fillRect(this.x, this.y, this.width, this.height);
-        } else {
-          // Flying obstacle as an "S" shape
-          ctx.strokeStyle = "#0f0";
-          ctx.lineWidth = 3;
-          ctx.beginPath();
-          ctx.moveTo(this.x, this.y);
-          ctx.bezierCurveTo(this.x + 10, this.y - 15, this.x + 15, this.y + 15, this.x + 25, this.y);
-          ctx.stroke();
-        }
+      // Obstacle spawn logic
+      if (frame % (score < 20 ? 120 : 60) === 0) {
+        let height = 40;
+        obstacles.push({ x: canvas.width, y: canvas.height - height, width: 20, height });
       }
+    }
 
-      update() {
-        this.x -= this.speed;
-        this.draw();
+    function detectCollision() {
+      return obstacles.some(o =>
+        player.x < o.x + o.width &&
+        player.x + player.width > o.x &&
+        player.y < o.y + o.height &&
+        player.y + player.height > o.y
+      );
+    }
+
+    function updateScore() {
+      score++;
+      scoreEl.textContent = score;
+
+      if (score > highScore) {
+        highScore = score;
+        highScoreEl.textContent = highScore;
+        highScores[username] = highScore;
+        localStorage.setItem("symbioticRunnerHighScores", JSON.stringify(highScores));
+      }
+    }
+
+    function gameLoop() {
+      if (!gameRunning) return;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      updatePlayer();
+      updateObstacles();
+      drawPlayer();
+      drawObstacles();
+      updateScore();
+
+      if (detectCollision()) {
+        gameRunning = false;
+        restartBtn.style.display = "block";
+      } else {
+        frame++;
+        requestAnimationFrame(gameLoop);
       }
     }
 
     function startGame() {
-      if (!usernameInput.value.trim()) {
-        alert("Please enter a username!");
-        return;
-      }
-      username = usernameInput.value.trim();
-      usernameContainer.style.display = "none";
-      scoreContainer.style.display = "block";
+      username = usernameField.value.trim() || "Player";
+      usernameInputDiv.style.display = "none";
+      ui.style.display = "block";
 
-      player = new Player();
+      highScore = highScores[username] || 0;
+      highScoreEl.textContent = highScore;
+
+      resetGame();
+    }
+
+    function resetGame() {
+      player.y = canvas.height - player.height;
+      player.dy = 0;
       obstacles = [];
       score = 0;
-      highScore = localStorage.getItem(username + "_highScore") || 0;
-      highScoreDisplay.textContent = `High Score: ${highScore}`;
-      gameOver = false;
-      gameStarted = true;
-
-      requestAnimationFrame(updateGame);
+      frame = 0;
+      scoreEl.textContent = score;
+      restartBtn.style.display = "none";
+      gameRunning = true;
+      gameLoop();
     }
 
-    function updateGame() {
-      if (!gameStarted) return;
-
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      player.update();
-
-      // Spawn obstacles
-      if (Math.random() < 0.02 + score * 0.0001) {
-        let type = score < 50 ? "ground" : (Math.random() < 0.5 ? "ground" : "flying");
-        let speed = 4 + score * 0.01;
-        obstacles.push(new Obstacle(type, speed));
-      }
-
-      obstacles.forEach((obs, index) => {
-        obs.update();
-
-        if (obs.x + obs.width < 0) {
-          obstacles.splice(index, 1);
-          score++;
-          scoreDisplay.textContent = `Score: ${score}`;
-        }
-
-        // Collision detection
-        if (
-          player.x < obs.x + obs.width &&
-          player.x + player.width > obs.x &&
-          player.y < obs.y + obs.height &&
-          player.y + player.height > obs.y
-        ) {
-          gameOver = true;
-          gameStarted = false;
-          if (score > highScore) {
-            highScore = score;
-            localStorage.setItem(username + "_highScore", highScore);
-          }
-          highScoreDisplay.textContent = `High Score: ${highScore}`;
-          alert(`Game Over, ${username}! Your score: ${score}`);
-          usernameContainer.style.display = "block";
-          scoreContainer.style.display = "none";
-        }
-      });
-
-      if (!gameOver) requestAnimationFrame(updateGame);
-    }
-
+    // Controls
     document.addEventListener("keydown", (e) => {
-      if (e.code === "Space") {
-        player.jump();
+      if ((e.code === "Space" || e.code === "ArrowUp") && player.grounded) {
+        player.dy = player.jumpPower;
+        player.grounded = false;
       }
     });
 
+    restartBtn.addEventListener("click", resetGame);
     startBtn.addEventListener("click", startGame);
+
+    window.addEventListener("resize", () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight - 80;
+    });
   </script>
 </body>
 </html>
