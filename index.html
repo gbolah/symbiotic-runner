@@ -99,7 +99,7 @@
     }
 
     let gameRunning = false;
-    let player = { x: 100, y: 300, width: 40, height: 40, dy: 0, jump: false };
+    let player = { x: 100, y: 300, width: 60, height: 60, dy: 0, jump: false };
     let gravity = 0.6;
     let obstacles = [];
     let score = 0;
@@ -151,6 +151,39 @@
       }
     }
 
+    function drawPlayer() {
+      ctx.save();
+      ctx.translate(player.x, player.y);
+
+      ctx.shadowBlur = 20;
+      ctx.shadowColor = "#00ff88";
+
+      ctx.beginPath();
+      ctx.lineWidth = 8;
+      ctx.strokeStyle = "#00ff88";
+
+      // Top line
+      ctx.moveTo(0, 0);
+      ctx.lineTo(player.width, 0);
+
+      // Left vertical
+      ctx.moveTo(0, 0);
+      ctx.lineTo(0, player.height / 2);
+
+      // Middle line
+      ctx.lineTo(player.width, player.height / 2);
+
+      // Right vertical
+      ctx.moveTo(player.width, player.height / 2);
+      ctx.lineTo(player.width, player.height);
+
+      // Bottom line
+      ctx.lineTo(0, player.height);
+
+      ctx.stroke();
+      ctx.restore();
+    }
+
     function startGame() {
       overlay.style.display = "none";
       gameRunning = true;
@@ -162,28 +195,12 @@
       requestAnimationFrame(update);
     }
 
-    function drawPlayer() {
-      ctx.beginPath();
-      let wave = Math.sin(Date.now() / 200) * 10;
-      ctx.moveTo(player.x, player.y + 10 + wave);
-      ctx.bezierCurveTo(player.x, player.y + wave, player.x + player.width, player.y + wave, player.x + player.width, player.y + 20 + wave);
-      ctx.bezierCurveTo(player.x + player.width, player.y + player.height / 2 + wave, player.x, player.y + player.height / 2 + wave, player.x, player.y + player.height - 20 + wave);
-      ctx.bezierCurveTo(player.x, player.y + player.height + wave, player.x + player.width, player.y + player.height + wave, player.x + player.width, player.y + player.height - 10 + wave);
-
-      ctx.strokeStyle = "#00ff88";
-      ctx.lineWidth = 6;
-      ctx.shadowBlur = 20;
-      ctx.shadowColor = "#00ff88";
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-    }
-
     function update() {
       if (!gameRunning) return;
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Player
+      // Draw player (S shape)
       drawPlayer();
 
       // Gravity
@@ -201,7 +218,7 @@
       ctx.fillStyle = "#222";
       ctx.fillRect(0, groundY, canvas.width, 50);
 
-      // Obstacles (easier early, harder later)
+      // Obstacles
       let spawnChance = 0.02;
       if (Math.random() < spawnChance) {
         if (score < 1000) {
@@ -219,7 +236,6 @@
         ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
         if (obs.x + obs.width < 0) obstacles.splice(i, 1);
 
-        // Collision (uses bounding box for fairness)
         if (
           player.x < obs.x + obs.width &&
           player.x + player.width > obs.x &&
